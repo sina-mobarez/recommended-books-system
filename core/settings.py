@@ -158,7 +158,5 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 RECOMMENDATION_METHOD = "genre"  # Can be 'genre', 'author', or 'similar_users'
 
-OPENAI_API_KEY = "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"
-
 
 CELERYD_FORCE_EXECV = True

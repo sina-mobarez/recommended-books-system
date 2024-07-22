@@ -13,6 +13,28 @@ from django.conf import settings
 import jwt
 from datetime import datetime, timedelta
 
+book_schema = openapi.Schema(
+    type=openapi.TYPE_OBJECT,
+    properties={
+        "id": openapi.Schema(type=openapi.TYPE_INTEGER),
+        "title": openapi.Schema(type=openapi.TYPE_STRING),
+        "author": openapi.Schema(type=openapi.TYPE_STRING),
+        "genre": openapi.Schema(type=openapi.TYPE_STRING),
+    },
+)
+
+
+recommendation_response = openapi.Schema(
+    type=openapi.TYPE_OBJECT,
+    properties={
+        "recommendations": openapi.Schema(
+            type=openapi.TYPE_ARRAY,
+            items=book_schema,
+        ),
+        "message": openapi.Schema(type=openapi.TYPE_STRING),
+    },
+)
+
 
 class BookViewSet(viewsets.ViewSet):
     @swagger_auto_schema(
@@ -67,7 +89,8 @@ class BookViewSet(viewsets.ViewSet):
         return Response(status=status.HTTP_404_NOT_FOUND)
 
     @swagger_auto_schema(
-        operation_description="Rate a book",
+        method="post",
+        operation_description="Rate a book or update an existing rating",
         request_body=openapi.Schema(
             type=openapi.TYPE_OBJECT,
             properties={
@@ -75,30 +98,68 @@ class BookViewSet(viewsets.ViewSet):
                     type=openapi.TYPE_INTEGER, description="Rating between 1 and 5"
                 )
             },
+            required=["rating"],
         ),
-        responses={201: "Created", 400: "Bad Request"},
+        responses={201: "Created", 200: "Updated", 400: "Bad Request"},
     )
-    @action(detail=True, methods=["post"])
+    @swagger_auto_schema(
+        method="delete",
+        operation_description="Delete a rating for a book",
+        responses={204: "No Content", 404: "Not Found"},
+    )
+    @action(detail=True, methods=["post", "delete"])
     def rate(self, request, pk=None):
         user_id = request.user.id
-        rating = request.data.get("rating")
-        if not 1 <= rating <= 5:
-            return Response(
-                {"error": "Rating must be between 1 and 5"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
 
-        with connection.cursor() as cursor:
-            cursor.execute(
-                """
-                INSERT INTO ratings (user_id, book_id, rating)
-                VALUES (%s, %s, %s)
-                ON CONFLICT (user_id, book_id) DO UPDATE
-                SET rating = EXCLUDED.rating
-            """,
-                [user_id, pk, rating],
-            )
-        return Response(status=status.HTTP_201_CREATED)
+        if request.method == "POST":
+            rating = request.data.get("rating")
+            if not rating or not 1 <= rating <= 5:
+                return Response(
+                    {"error": "Rating must be between 1 and 5"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO ratings (user_id, book_id, rating)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (user_id, book_id) DO UPDATE
+                    SET rating = EXCLUDED.rating
+                    RETURNING (xmax = 0) AS created
+                    """,
+                    [user_id, pk, rating],
+                )
+                created = cursor.fetchone()[0]
+
+            if created:
+                return Response(
+                    {"message": "Rating created"}, status=status.HTTP_201_CREATED
+                )
+            else:
+                return Response(
+                    {"message": "Rating updated"}, status=status.HTTP_200_OK
+                )
+
+        elif request.method == "DELETE":
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    DELETE FROM ratings
+                    WHERE user_id = %s AND book_id = %s
+                    RETURNING id
+                    """,
+                    [user_id, pk],
+                )
+                deleted = cursor.fetchone()
+
+            if deleted:
+                return Response(status=status.HTTP_204_NO_CONTENT)
+            else:
+                return Response(
+                    {"error": "Rating not found"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
 
     @swagger_auto_schema(
         operation_description="Filter books by genre",
@@ -121,14 +182,45 @@ class BookViewSet(viewsets.ViewSet):
         return Response(books)
 
     @swagger_auto_schema(
-        operation_description="Get book recommendations", responses={200: "Success"}
+        operation_description="Get book recommendations based on user's ratings",
+        responses={
+            200: openapi.Response(
+                description="Successful response",
+                schema=recommendation_response,
+                examples={
+                    "application/json": {
+                        "recommendations": [
+                            {
+                                "id": 1,
+                                "title": "To Kill a Mockingbird",
+                                "author": "Harper Lee",
+                                "genre": "Fiction",
+                            },
+                            {
+                                "id": 2,
+                                "title": "1984",
+                                "author": "George Orwell",
+                                "genre": "Science Fiction",
+                            },
+                        ]
+                    }
+                },
+            ),
+            400: "Bad Request: Invalid recommendation method",
+            401: "Unauthorized: User not authenticated",
+        },
+        operation_summary="Get book recommendations",
     )
     @action(detail=False, methods=["get"])
     def recommendations(self, request):
         user_id = request.user.id
         method = settings.RECOMMENDATION_METHOD
         recommendations = get_recommendations(user_id, method)
-        return Response(recommendations)
+
+        if isinstance(recommendations, dict) and "message" in recommendations:
+            return Response(recommendations, status=status.HTTP_200_OK)
+
+        return Response(recommendations, status=status.HTTP_200_OK)
 
 
 class RegisterView(views.APIView):

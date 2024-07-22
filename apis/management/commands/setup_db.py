@@ -42,6 +42,16 @@ class Command(BaseCommand):
                 )
             """
             )
+            cursor.execute(
+                """
+                CREATE EXTENSION IF NOT EXISTS vector;
+            """
+            )
+            cursor.execute(
+                """
+                ALTER TABLE books ADD COLUMN IF NOT EXISTS embedding vector(1536);
+            """
+            )
 
     def create_users(self):
         for i in range(1, 6):

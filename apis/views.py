@@ -8,10 +8,12 @@ from apis.recommender import get_recommendations
 from django.conf import settings
 from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
-from django.contrib.auth import authenticate
-from django.conf import settings
 import jwt
 from datetime import datetime, timedelta
+import openai
+
+
+openai.api_key = settings.OPENAI_API_KEY
 
 book_schema = openapi.Schema(
     type=openapi.TYPE_OBJECT,
@@ -221,6 +223,97 @@ class BookViewSet(viewsets.ViewSet):
             return Response(recommendations, status=status.HTTP_200_OK)
 
         return Response(recommendations, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(
+        operation_description="Get 10 books similar to the specified book",
+        responses={
+            200: openapi.Response(
+                description="Successful response",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_ARRAY,
+                    items=openapi.Schema(
+                        type=openapi.TYPE_OBJECT,
+                        properties={
+                            "id": openapi.Schema(type=openapi.TYPE_INTEGER),
+                            "title": openapi.Schema(type=openapi.TYPE_STRING),
+                            "author": openapi.Schema(type=openapi.TYPE_STRING),
+                            "genre": openapi.Schema(type=openapi.TYPE_STRING),
+                            "similarity": openapi.Schema(type=openapi.TYPE_NUMBER),
+                        },
+                    ),
+                ),
+            ),
+            404: "Book not found",
+        },
+    )
+    @action(detail=True, methods=["get"])
+    def similar_books(self, request, pk=None):
+        # Get the book details
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT title, author, genre, embedding
+                FROM books
+                WHERE id = %s
+            """,
+                [pk],
+            )
+            book = cursor.fetchone()
+
+        if not book:
+            return Response(
+                {"error": "Book not found"}, status=status.HTTP_404_NOT_FOUND
+            )
+
+        title, author, genre, embedding = book
+
+        # If the book doesn't have an embedding, generate one
+        if not embedding:
+            text = f"{title} {author} {genre}"
+            response = openai.Embedding.create(
+                input=text, model="text-embedding-ada-002"
+            )
+            embedding = response["data"][0]["embedding"]
+
+            # Update the book's embedding in the database
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE books
+                    SET embedding = %s
+                    WHERE id = %s
+                """,
+                    [embedding, pk],
+                )
+
+        # Find similar books
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id, title, author, genre,
+                       1 - (embedding <=> %s) AS similarity
+                FROM books
+                WHERE id != %s
+                ORDER BY similarity DESC
+                LIMIT 10
+            """,
+                [embedding, pk],
+            )
+            similar_books = cursor.fetchall()
+
+        # Format the recommendations
+        formatted_recommendations = [
+            {
+                "id": book[0],
+                "title": book[1],
+                "author": book[2],
+                "genre": book[3],
+                "similarity": book[4],
+            }
+            for book in similar_books
+        ]
+
+        return Response(formatted_recommendations)
 
 
 class RegisterView(views.APIView):

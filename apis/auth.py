@@ -12,7 +12,7 @@ class JWTAuthentication(authentication.BaseAuthentication):
             return None
 
         try:
-            token = auth_header.split()[1]
+            token = auth_header
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
             user = User.objects.get(id=payload["user_id"])
             return (user, token)

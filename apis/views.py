@@ -2,6 +2,8 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.db import connection
+from apis.recommender import get_recommendations
+from django.conf import settings
 
 class BookViewSet(viewsets.ViewSet):
     def list(self, request):
@@ -41,3 +43,10 @@ class BookViewSet(viewsets.ViewSet):
             cursor.execute("SELECT * FROM books WHERE genre = %s", [genre])
             books = cursor.fetchall()
         return Response(books)
+
+    @action(detail=False, methods=['get'])
+    def recommendations(self, request):
+        user_id = request.user.id
+        method = settings.RECOMMENDATION_METHOD
+        recommendations = get_recommendations(user_id, method)
+        return Response(recommendations)

@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.db import connection
 from apis.recommender import get_recommendations
+from django.contrib.auth import authenticate
 from django.conf import settings
 from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
@@ -266,25 +267,6 @@ class BookViewSet(viewsets.ViewSet):
             )
 
         title, author, genre, embedding = book
-
-        # If the book doesn't have an embedding, generate one
-        if not embedding:
-            text = f"{title} {author} {genre}"
-            response = openai.Embedding.create(
-                input=text, model="text-embedding-ada-002"
-            )
-            embedding = response["data"][0]["embedding"]
-
-            # Update the book's embedding in the database
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    UPDATE books
-                    SET embedding = %s
-                    WHERE id = %s
-                """,
-                    [embedding, pk],
-                )
 
         # Find similar books
         with connection.cursor() as cursor:

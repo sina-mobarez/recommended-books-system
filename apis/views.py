@@ -16,12 +16,42 @@ from datetime import datetime, timedelta
 
 class BookViewSet(viewsets.ViewSet):
     @swagger_auto_schema(
-        operation_description="List all books", responses={200: "Success"}
+        operation_description="List all books with the current user's ratings",
+        responses={
+            200: openapi.Response(
+                description="Success",
+                schema=openapi.Schema(
+                    type=openapi.TYPE_ARRAY,
+                    items=openapi.Schema(
+                        type=openapi.TYPE_OBJECT,
+                        properties={
+                            "id": openapi.Schema(type=openapi.TYPE_INTEGER),
+                            "title": openapi.Schema(type=openapi.TYPE_STRING),
+                            "author": openapi.Schema(type=openapi.TYPE_STRING),
+                            "genre": openapi.Schema(type=openapi.TYPE_STRING),
+                            "user_rating": openapi.Schema(
+                                type=openapi.TYPE_INTEGER, nullable=True
+                            ),
+                        },
+                    ),
+                ),
+            )
+        },
     )
     def list(self, request):
+        user_id = request.user.id
         with connection.cursor() as cursor:
-            cursor.execute("SELECT * FROM books")
-            books = cursor.fetchall()
+            cursor.execute(
+                """
+                SELECT b.id, b.title, b.author, b.genre, r.rating as user_rating
+                FROM books b
+                LEFT JOIN ratings r ON b.id = r.book_id AND r.user_id = %s
+                ORDER BY b.id
+            """,
+                [user_id],
+            )
+            columns = [col[0] for col in cursor.description]
+            books = [dict(zip(columns, row)) for row in cursor.fetchall()]
         return Response(books)
 
     @swagger_auto_schema(

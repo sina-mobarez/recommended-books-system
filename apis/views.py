@@ -14,8 +14,6 @@ from datetime import datetime, timedelta
 import openai
 
 
-openai.api_key = settings.OPENAI_API_KEY
-
 book_schema = openapi.Schema(
     type=openapi.TYPE_OBJECT,
     properties={

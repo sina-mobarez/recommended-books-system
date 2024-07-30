@@ -1,6 +1,6 @@
 # Recommended Books System
 
-Restful apis for a system that show user a list of books and recommended books by user rating, and similar books
+Restful apis for a system that show user a list of books and recommended books by user rating, and similar books (in this project tried to use raw sql instead ORM)
 
 ## Installation
 

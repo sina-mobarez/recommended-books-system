@@ -11,7 +11,6 @@ from rest_framework.permissions import AllowAny
 from django.contrib.auth.models import User
 import jwt
 from datetime import datetime, timedelta
-import openai
 
 
 book_schema = openapi.Schema(

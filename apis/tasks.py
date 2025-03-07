@@ -1,12 +1,17 @@
 from sentence_transformers import SentenceTransformer
 from celery import shared_task
 from django.db import connection
+from functools import lru_cache
 
-model = SentenceTransformer('all-MiniLM-L6-v2')
+
+@lru_cache(maxsize=1)
+def get_model():
+    return SentenceTransformer('all-MiniLM-L6-v2')
 
 
 @shared_task
 def vectorize_book(book_id):
+    model = get_model()
     with connection.cursor() as cursor:
         cursor.execute(
             "SELECT title, author, genre FROM books WHERE id = %s", [book_id]

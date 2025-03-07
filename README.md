@@ -3,16 +3,16 @@
 Restful apis for a system that show user a list of books and recommended books by user rating, and similar books (in this project tried to use raw sql instead ORM)
 
 ## Features
-JWT Authentication
-Book recommendations based on:
-Genre preferences
-Author preferences
-Similar users
-Vector similarity search using pgvector
-Async task processing with Celery
-API documentation with Swagger
-Environment configuration with python-dotenv
-Mock data generation with Faker
+- JWT Authentication
+- Book recommendations based on:
+- Genre preferences
+- Author preferences
+- Similar users
+- Vector similarity search using pgvector
+- Async task processing with Celery
+- API documentation with Swagger
+- Environment configuration with python-dotenv
+- Mock data generation with Faker
 
 ## API Documentation
 Access the API documentation at:

@@ -5,3 +5,4 @@ drf-yasg==1.21.9
 psycopg2-binary==2.9.10
 PyJWT==2.10.1
 Faker==36.1.1
+sentence-transformers==3.4.1

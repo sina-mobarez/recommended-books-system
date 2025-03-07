@@ -58,7 +58,7 @@ class Command(BaseCommand):
             )
             cursor.execute(
                 """
-                ALTER TABLE books ADD COLUMN IF NOT EXISTS embedding vector(1536);
+                ALTER TABLE books ADD COLUMN IF NOT EXISTS embedding vector(384);
             """
             )
 
